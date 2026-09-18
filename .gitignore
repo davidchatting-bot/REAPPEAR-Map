@@ -1,0 +1,9 @@
+lib/
+build/
+data/eqcy_600.old.png
+source/TheMap.java
+data/location_cache.json
+data/pi-hole.json
+data/Helvetica.ttf
+data/HelveticaLight.ttf
+data/eqcy_600.bright.png
