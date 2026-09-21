@@ -9,9 +9,7 @@ The Map runs on a Raspberry Pi as a display in your home and illustrates the net
 ## How work is mapped
 
 1. A device on the network makes a DNS request; Pi-hole, as the resolver, logs it.
-2. `LogLines.pde` polls Pi-hole's API for new hostnames roughly once a second, filtering out
-   reverse lookups, local names, and ipinfo.io's own hostname (to avoid a lookup-of-a-lookup
-   loop).
+2. `LogLines.pde` polls Pi-hole's API for new hostnames roughly once a second.
 3. New hostnames join a queue and are processed in turn.
 4. Each hostname is resolved to an IP, then that IP is sent to [ipinfo.io](https://ipinfo.io/) for a rough lat/lon,
    cached to `data/location_cache.json`.
