@@ -1,18 +1,12 @@
-# REAPPEAR: Map
+# REAPPEAR: The Map - 10⁷ metres
 
-A rotating 3D globe on a [Pimoroni HyperPixel 2.1" Round](https://shop.pimoroni.com/en-us/products/hyperpixel-round)
-display that animates to the location of every DNS request seen by
-[Pi-hole](https://pi-hole.net/) (a network-wide DNS ad-blocker, used here purely as a
-request log) - making an otherwise invisible stream of background network traffic visible.
+The Map is one of the Network Scopes from [The Reappearing Computer](https://davidchatting.com/reappearingcomputer/), a research project about making computational work visible. This scope operates at 10⁷ metres - the scale of the Earth itself, showing how the home creates work across the planet. The other scopes measure at different scales.
 
-One of the Network Scopes from [The Reappearing Computer](https://davidchatting.com/reappearingcomputer/),
-a research project on making computational processes visible to everyday users. This scope
-works at ~10⁷ metres - the scale of the Earth itself, showing network activity spread
-across the whole planet.
+The Map runs on a Raspberry Pi as a display in your home and illustrates the network activity in real-time. It requires that [Pi-hole](https://pi-hole.net/), a network-wide DNS ad-blocker, is running on the local network.
 
 ![Demo: the globe rotating and settling on four example hostnames](demo.gif)
 
-## How a DNS request becomes a point on the globe
+## How work is mapped
 
 1. A device on the network makes a DNS request; Pi-hole, as the resolver, logs it.
 2. `LogLines.pde` polls Pi-hole's API for new hostnames roughly once a second, filtering out
@@ -54,7 +48,7 @@ then run `./TheMap`:
 
 - **Board:** Raspberry Pi 3 Model B Rev 1.2
 - **OS:** Raspbian GNU/Linux 10 (buster), kernel `5.10.103-v7+` (armv7l)
-- **Display:** Pimoroni HyperPixel 2.1" Round (`dtoverlay=hyperpixel2r` in `/boot/config.txt`)
+- **Display:** [Pimoroni HyperPixel 2.1" Round](https://shop.pimoroni.com/en-us/products/hyperpixel-round) (`dtoverlay=hyperpixel2r` in `/boot/config.txt`)
 - **Java:** OpenJDK 11.0.18 (Raspbian build)
 - Known quirk: this HyperPixel + `vc4-kms-v3d` GPU driver combination sometimes runs fine
   but paints nothing to the physical screen. `sudo reboot` reliably clears it.
