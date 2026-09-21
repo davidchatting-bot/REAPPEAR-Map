@@ -1,5 +1,6 @@
 lib/
 build/
+build_classes/
 data/eqcy_600.old.png
 source/TheMap.java
 data/location_cache.json

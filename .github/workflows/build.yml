@@ -1,0 +1,108 @@
+name: Build TheMap.jar
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  PROCESSING_VERSION: 3.5.4
+  PROCESSING_TAG: processing-0270-3.5.4
+  ANI_REF: master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out TheMap
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Cache Processing download
+        id: cache-processing
+        uses: actions/cache@v4
+        with:
+          path: processing-${{ env.PROCESSING_VERSION }}
+          key: processing-${{ env.PROCESSING_VERSION }}-linux64
+
+      # core.jar, jogl-all.jar and gluegen-rt.jar (the pure-Java API jars)
+      # come from here. The ARM-specific *-natives-linux-armv6hf.jar files
+      # are a runtime-only dependency of JOGL's native library loader that
+      # no official Processing release includes (Processing dropped Linux
+      # ARM builds before 3.5.4); they're fetched separately from Maven
+      # Central by tools/fetch-natives.sh, below.
+      - name: Download Processing ${{ env.PROCESSING_VERSION }}
+        if: steps.cache-processing.outputs.cache-hit != 'true'
+        run: |
+          curl -fL -o processing.tgz \
+            "https://github.com/processing/processing/releases/download/${{ env.PROCESSING_TAG }}/processing-${{ env.PROCESSING_VERSION }}-linux64.tgz"
+          mkdir -p processing-${{ env.PROCESSING_VERSION }}
+          tar xzf processing.tgz -C processing-${{ env.PROCESSING_VERSION }} --strip-components=1
+          rm processing.tgz
+
+      - name: Check out Ani
+        uses: actions/checkout@v4
+        with:
+          repository: b-g/Ani
+          ref: ${{ env.ANI_REF }}
+          path: Ani
+
+      - name: Build Ani.jar from source
+        run: |
+          mkdir -p Ani_classes
+          find Ani/src -name '*.java' > Ani_sources.txt
+          # Ani's source files are Latin-1 (degree signs, accented names in
+          # comments/headers), not UTF-8 - javac's default encoding assumption
+          # otherwise fails with "unmappable character" errors.
+          javac -encoding ISO-8859-1 -cp "processing-${{ env.PROCESSING_VERSION }}/core/library/core.jar" \
+            -d Ani_classes @Ani_sources.txt
+          jar --create --file=Ani.jar -C Ani_classes .
+
+      # Same lib/ layout and same build.sh a person runs locally, so CI
+      # exercises the real build path (including tools/pde2java.py, which
+      # generates build/TheMap.java from source/*.pde) rather than a copy of it.
+      - name: Build TheMap.jar
+        run: |
+          mkdir -p lib
+          cp "processing-${{ env.PROCESSING_VERSION }}/core/library/core.jar" lib/
+          cp "processing-${{ env.PROCESSING_VERSION }}/core/library/jogl-all.jar" lib/
+          cp "processing-${{ env.PROCESSING_VERSION }}/core/library/gluegen-rt.jar" lib/
+          cp Ani.jar lib/
+          ./build.sh
+
+      - name: Upload TheMap.jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: TheMap.jar
+          path: lib/TheMap.jar
+
+      # A complete, ready-to-run bundle for the actual target device: same
+      # lib/ layout TheMap (the launcher script) already expects, including
+      # the ARM native jars that make it actually runnable rather than just
+      # compilable. config.properties itself is deliberately NOT included -
+      # only the .example template, same as the repo - since it holds real
+      # credentials on a real device.
+      - name: Assemble linux-armv6hf runtime bundle
+        run: |
+          ./tools/fetch-natives.sh lib
+          mkdir -p dist/TheMap-linux-armv6hf/lib
+          cp lib/*.jar dist/TheMap-linux-armv6hf/lib/
+          cp TheMap dist/TheMap-linux-armv6hf/
+          chmod +x dist/TheMap-linux-armv6hf/TheMap
+          cp config.properties.example dist/TheMap-linux-armv6hf/
+          mkdir -p dist/TheMap-linux-armv6hf/data
+          cp data/eqcy_600.png dist/TheMap-linux-armv6hf/data/
+          tar czf TheMap-linux-armv6hf.tar.gz -C dist TheMap-linux-armv6hf
+
+      - name: Upload linux-armv6hf runtime bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: TheMap-linux-armv6hf
+          path: TheMap-linux-armv6hf.tar.gz
