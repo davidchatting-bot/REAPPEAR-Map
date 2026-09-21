@@ -2,7 +2,7 @@
 
 The Map is one of the five Network Scopes from [The Reappearing Computer](https://davidchatting.com/reappearingcomputer/), a research project about making computational work visible. This scope operates at the largest scale, the Earth itself, 10⁷ metres - it shows how the home creates work across the planet through its use of the Internet. The other scopes measure at different scales.
 
-The Map runs on a Raspberry Pi as a display in your home and illustrates the network activity in real-time. It requires that [Pi-hole](https://pi-hole.net/), a network-wide DNS ad-blocker, is running on the local network.
+The Map is a [Processing](https://processing.org) sketch that runs on a Raspberry Pi, as a display in your home and illustrates the network activity in real-time. It requires that [Pi-hole](https://pi-hole.net/), a network-wide DNS ad-blocker, is running on the local network.
 
 ![Demo: the globe rotating and settling on five example hostnames](demo.gif)
 
@@ -17,13 +17,12 @@ The Map runs on a Raspberry Pi as a display in your home and illustrates the net
 
 ## Structure
 
-- `source/` — the `.pde` sketch source, the only code that's edited by hand
+- `source/` — the `.pde` sketch source
 - `tools/pde2java.py` — combines the `.pde` tabs into a single compilable `build/TheMap.java`
-  (a stand-in for the Processing IDE's preprocessor, generated on every build, not tracked)
+  (a stand-in for the Processing IDE's preprocessor)
 - `build.sh` — builds `lib/TheMap.jar` from `source/`
 - `tools/fetch-natives.sh` — downloads the ARM native libraries into `lib/`, see Building below
-- `data/` — earth texture (attribution below) and the location cach
-- `lib/` — third-party libraries, see Building below
+- `data/` — earth texture (attribution below) and the location cache
 - `TheMap` — launcher script
 - `config.properties.example` — config template (copy to `config.properties` and fill in real values)
 
@@ -36,25 +35,46 @@ The Map runs on a Raspberry Pi as a display in your home and illustrates the net
 
 ## Building
 
-To build locally, put `core.jar`, `jogl-all.jar`, `gluegen-rt.jar` and `Ani.jar` in `lib/` and run
-`./build.sh` (needs a JDK and Python 3). It generates `build/TheMap.java` from `source/*.pde`,
-compiles it, and writes `lib/TheMap.jar`.
+To build locally, put `core.jar` and `Ani.jar` in `lib/` and run `./build.sh` (needs a JDK and
+Python 3). It generates `build/TheMap.java` from `source/*.pde`, compiles it, and writes
+`lib/TheMap.jar`.
 
-`.github/workflows/build.yml` runs the same script on every push and uploads two artifacts:
+- `core.jar` is in `core/library/` of a
+  [Processing 3.5.4](https://github.com/processing/processing/releases/tag/processing-0270-3.5.4)
+  download.
+- `Ani.jar` has to be built from the [Ani source](https://github.com/b-g/Ani), whose files are
+  Latin-1, hence the `-encoding`:
+  `javac -encoding ISO-8859-1 -cp lib/core.jar -d Ani_classes $(find Ani/src -name '*.java')`, then
+  `jar --create --file=lib/Ani.jar -C Ani_classes .`
+
+`.github/workflows/build.yml` runs the same script on every push and uploads three artifacts:
 
 - **TheMap.jar** - just the compiled sketch, for catching compile errors quickly.
-- **TheMap-linux-armv6hf** - a complete, ready-to-run bundle for the Pi: `TheMap.jar` plus
-  every jar it needs (`core.jar`/`jogl-all.jar`/`gluegen-rt.jar` from Processing 3.5.4,
-  `Ani.jar` built from source, and the ARM-specific native jars from Maven Central), the
-  launcher script, `config.properties.example`, and the earth texture. To deploy: download,
-  extract, copy `config.properties.example` to `config.properties` and fill in real values
-  (see Running below), then run `./TheMap`.
+- **TheMap** - everything that isn't platform-specific: `TheMap.jar`, `core.jar` (from
+  Processing 3.5.4) and `Ani.jar` (built from source), the launcher script,
+  `config.properties.example`, and the earth texture. It needs JOGL and GlueGen for your platform
+  added to `lib/` (below) before it will run.
+- **TheMap-linux-armv6hf** - the same plus JOGL, GlueGen and their Raspberry Pi native libraries,
+  ready to run: download, extract, copy `config.properties.example` to `config.properties` and
+  fill in real values (see Running below), then run `./TheMap`.
 
-The ARM native jars (`jogl-all-natives-linux-armv6hf.jar`, `gluegen-rt-natives-linux-armv6hf.jar`)
-are a runtime-only dependency of JOGL's native library loader, so `build.sh` doesn't need them, but
-a Pi needs them in `lib/` to run. No official Processing release includes them (Processing dropped
-Linux ARM builds before 3.5.4), so `./tools/fetch-natives.sh` downloads JOGL/GlueGen 2.3.2's from
-Maven Central and checks them against pinned SHA-256 hashes; CI runs it when assembling the bundle.
+Both bundles are also published as assets of the rolling
+[latest release](../../releases/latest), replaced on every push to `master`.
+
+JOGL and GlueGen are the OpenGL layer behind the sketch's `P3D` renderer. The sketch never
+references them, so building doesn't need them, but running does, and each comes as a Java jar
+plus a per-platform natives jar. Whatever runs the app needs all four in `lib/` (the launcher uses
+every jar in `lib/`, so nothing else needs editing). The Pi bundle takes `jogl-all.jar` and
+`gluegen-rt.jar` from Processing 3.5.4. No official Processing release includes the Raspberry Pi
+natives (Processing dropped Linux ARM builds before 3.5.4), so `./tools/fetch-natives.sh`
+downloads JOGL/GlueGen 2.3.2's from Maven Central and checks them against pinned SHA-256 hashes;
+CI runs it when assembling the Pi bundle. For another platform, add the matching
+`jogl-all-2.3.2.jar`, `gluegen-rt-2.3.2.jar`, `jogl-all-2.3.2-natives-<platform>.jar` and
+`gluegen-rt-2.3.2-natives-<platform>.jar` from Maven Central
+([JOGL](https://repo1.maven.org/maven2/org/jogamp/jogl/jogl-all/2.3.2/),
+[GlueGen](https://repo1.maven.org/maven2/org/jogamp/gluegen/gluegen-rt/2.3.2/)); platforms
+include `linux-amd64`, `macosx-universal` and `windows-amd64`. Only the Raspberry Pi has been
+tested, and the launcher is a shell script, so Windows would need its own.
 
 ## Font
 
@@ -81,6 +101,7 @@ MIT licensed — see [LICENSE](LICENSE).
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)): rasterized, thresholded to a
 binary land mask, then edge-detected down to just the coastline as a white line on black.
 
-The native jars fetched by `tools/fetch-natives.sh` (and bundled in the CI artifact) are
-[JOGL](https://jogamp.org/jogl/www/) and [GlueGen](https://jogamp.org/gluegen/www/) native
-libraries, Copyright 2009-2024 JogAmp Community, BSD 2-Clause licensed.
+The JOGL and GlueGen jars and native libraries in the `TheMap-linux-armv6hf` bundle (the natives
+fetched by `tools/fetch-natives.sh`) are [JOGL](https://jogamp.org/jogl/www/) and
+[GlueGen](https://jogamp.org/gluegen/www/), Copyright 2009-2024 JogAmp Community, BSD
+2-Clause licensed.

@@ -2,4 +2,6 @@
 
 APPDIR=$(readlink -f "$0")
 APPDIR=$(dirname "$APPDIR")
-java -Djna.nosys=true -Djava.library.path="$APPDIR:$APPDIR/lib" -cp "$APPDIR:$APPDIR/lib/TheMap.jar:$APPDIR/lib/core.jar:$APPDIR/lib/jogl-all.jar:$APPDIR/lib/gluegen-rt.jar:$APPDIR/lib/jogl-all-natives-linux-armv6hf.jar:$APPDIR/lib/gluegen-rt-natives-linux-armv6hf.jar:$APPDIR/lib/Ani.jar" TheMap "$@"
+# lib/* picks up every jar in lib/, including whichever platform's JOGL/GlueGen
+# natives jars are present - nothing here names a specific platform.
+java -Djna.nosys=true -Djava.library.path="$APPDIR:$APPDIR/lib" -cp "$APPDIR:$APPDIR/lib/*" TheMap "$@"

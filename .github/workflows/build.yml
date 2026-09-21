@@ -7,6 +7,9 @@ on:
     branches: [master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   PROCESSING_VERSION: 3.5.4
   PROCESSING_TAG: processing-0270-3.5.4
@@ -65,9 +68,11 @@ jobs:
             -d Ani_classes @Ani_sources.txt
           jar --create --file=Ani.jar -C Ani_classes .
 
-      # Same lib/ layout and same build.sh a person runs locally, so CI
-      # exercises the real build path (including tools/pde2java.py, which
-      # generates build/TheMap.java from source/*.pde) rather than a copy of it.
+      # Runs the same build.sh a person runs locally, so CI exercises the real
+      # build path (including tools/pde2java.py, which generates
+      # build/TheMap.java from source/*.pde) rather than a copy of it. Only
+      # core.jar and Ani.jar are needed to compile; JOGL and GlueGen are
+      # copied into lib/ too because the Pi bundle below includes them.
       - name: Build TheMap.jar
         run: |
           mkdir -p lib
@@ -83,26 +88,85 @@ jobs:
           name: TheMap.jar
           path: lib/TheMap.jar
 
-      # A complete, ready-to-run bundle for the actual target device: same
-      # lib/ layout TheMap (the launcher script) already expects, including
-      # the ARM native jars that make it actually runnable rather than just
-      # compilable. config.properties itself is deliberately NOT included -
-      # only the .example template, same as the repo - since it holds real
-      # credentials on a real device.
-      - name: Assemble linux-armv6hf runtime bundle
+      # Two bundles with the same layout as the launcher script expects.
+      # TheMap has only what isn't platform-specific - the sketch, Processing
+      # core and Ani - so JOGL and GlueGen (the OpenGL layer behind P3D, whose
+      # jars come paired with per-platform natives) are left for the platform
+      # to supply in lib/; the launcher picks up whatever jars are there.
+      # TheMap-linux-armv6hf is that same bundle plus JOGL, GlueGen and their
+      # Raspberry Pi natives, ready to run. config.properties itself is
+      # deliberately NOT included - only the .example template, same as the
+      # repo - since it holds real credentials on a real device.
+      - name: Assemble bundles
         run: |
-          ./tools/fetch-natives.sh lib
-          mkdir -p dist/TheMap-linux-armv6hf/lib
-          cp lib/*.jar dist/TheMap-linux-armv6hf/lib/
-          cp TheMap dist/TheMap-linux-armv6hf/
-          chmod +x dist/TheMap-linux-armv6hf/TheMap
-          cp config.properties.example dist/TheMap-linux-armv6hf/
-          mkdir -p dist/TheMap-linux-armv6hf/data
-          cp data/eqcy_600.png dist/TheMap-linux-armv6hf/data/
+          mkdir -p dist/TheMap/lib dist/TheMap/data
+          cp lib/TheMap.jar lib/core.jar lib/Ani.jar dist/TheMap/lib/
+          cp TheMap config.properties.example dist/TheMap/
+          chmod +x dist/TheMap/TheMap
+          cp data/eqcy_600.png dist/TheMap/data/
+          tar czf TheMap.tar.gz -C dist TheMap
+
+          cp -r dist/TheMap dist/TheMap-linux-armv6hf
+          cp lib/jogl-all.jar lib/gluegen-rt.jar dist/TheMap-linux-armv6hf/lib/
+          ./tools/fetch-natives.sh dist/TheMap-linux-armv6hf/lib
           tar czf TheMap-linux-armv6hf.tar.gz -C dist TheMap-linux-armv6hf
+
+      - name: Upload TheMap bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: TheMap
+          path: TheMap.tar.gz
 
       - name: Upload linux-armv6hf runtime bundle
         uses: actions/upload-artifact@v4
         with:
           name: TheMap-linux-armv6hf
           path: TheMap-linux-armv6hf.tar.gz
+
+  # A single rolling release, always tagged `latest`, replaced on every push
+  # to master - so the download URL never changes and there are no versions to
+  # manage. Deleted and recreated rather than edited in place, which is what
+  # moves the `latest` tag to the new commit. Kept as its own job so the build
+  # job (which runs code from pull requests too) never holds write access.
+  release:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: rolling-release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download TheMap bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: TheMap
+          path: dist
+
+      - name: Download linux-armv6hf bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: TheMap-linux-armv6hf
+          path: dist
+
+      - name: Publish rolling latest release
+        run: |
+          if gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          fi
+          cat > notes.md <<EOF
+          Automatically built from ${GITHUB_SHA::7} ([commit](https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA})), replaced on every push to master.
+
+          - \`TheMap-linux-armv6hf.tar.gz\` - ready to run on a Raspberry Pi, with JOGL, GlueGen and their Raspberry Pi native libraries included. Extract, copy \`config.properties.example\` to \`config.properties\` and fill in real values, then run \`./TheMap\`.
+          - \`TheMap.tar.gz\` - for any other platform: just the sketch, Processing core and Ani. Before running, add JOGL and GlueGen 2.3.2 for your platform to \`lib/\` (the \`jogl-all\` and \`gluegen-rt\` jars plus their natives jars, from Maven Central). Only the Raspberry Pi has been tested.
+
+          See the README for details.
+          EOF
+          gh release create latest dist/TheMap.tar.gz dist/TheMap-linux-armv6hf.tar.gz \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Latest build" \
+            --notes-file notes.md
