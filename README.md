@@ -1,10 +1,10 @@
 # REAPPEAR: The Map - 10⁷ metres
 
-The Map is one of the Network Scopes from [The Reappearing Computer](https://davidchatting.com/reappearingcomputer/), a research project about making computational work visible. This scope operates at 10⁷ metres - the scale of the Earth itself, showing how the home creates work across the planet. The other scopes measure at different scales.
+The Map is one of the Network Scopes from [The Reappearing Computer](https://davidchatting.com/reappearingcomputer/), a research project about making computational work visible. This scope operates at 10⁷ metres - the scale of the Earth itself, showing how the home creates work across the planet through it's use of the Internet. The other scopes measure at different scales.
 
 The Map runs on a Raspberry Pi as a display in your home and illustrates the network activity in real-time. It requires that [Pi-hole](https://pi-hole.net/), a network-wide DNS ad-blocker, is running on the local network.
 
-![Demo: the globe rotating and settling on four example hostnames](demo.gif)
+![Demo: the globe rotating and settling on five example hostnames](demo.gif)
 
 ## How work is mapped
 
@@ -12,12 +12,10 @@ The Map runs on a Raspberry Pi as a display in your home and illustrates the net
 2. `LogLines.pde` polls Pi-hole's API for new hostnames roughly once a second, filtering out
    reverse lookups, local names, and ipinfo.io's own hostname (to avoid a lookup-of-a-lookup
    loop).
-3. New hostnames join a FIFO queue - also shown on screen as an animation to-do list - and
-   are worked through oldest-first.
-4. Each hostname is resolved to an IP, then that IP is sent to ipinfo.io for a rough lat/lon,
-   cached to `data/location_cache.json` so repeat lookups are free.
-5. The globe animates to that location, a marker grows to show the hostname, holds briefly,
-   then collapses and moves to the next host in the queue.
+3. New hostnames join a queue and are processed in turn.
+4. Each hostname is resolved to an IP, then that IP is sent to [ipinfo.io](https://ipinfo.io/) for a rough lat/lon,
+   cached to `data/location_cache.json`.
+5. The globe animates to that location.
 
 ## Running
 
